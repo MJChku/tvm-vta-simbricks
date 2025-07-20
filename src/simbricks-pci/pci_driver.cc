@@ -20,8 +20,11 @@
  * \brief VTA driver for SimBricks simulated PCI boards support.
  */
 
+#include <bits/stdint-uintn.h>
+#include <bits/types/struct_timespec.h>
 #include <vta/driver.h>
 #include <cstdlib>
+#include <ostream>
 #include <thread>
 #include <iostream>
 #include <time.h>
@@ -39,16 +42,27 @@ static int vfio_fd = -1;
 
 static void *alloc_base = nullptr;
 static uint64_t alloc_phys_base = 1ULL * 1024 * 1024 * 1024;
-static size_t alloc_size = 512 * 1024 * 1024;
+static size_t alloc_size = 100 * 1024 * 1024;
 static size_t alloc_off = 0;
+
+static uint64_t total_vta_time = 0;
 
 static void alloc_init()
 {
   if (alloc_base)
     return;
 
-  std::cerr << "simbricks-pci: initializing allocator" << std::endl;
-  int fd = open("/dev/mem", O_RDWR | O_SYNC);
+  char *vfio_group_id_str = std::getenv("VTA_VFIO_GROUP_ID");
+  if (vfio_group_id_str == nullptr) {
+    std::cerr << "VTA_VFIO_GROUP_ID is not set" << std::endl;
+    abort();
+  }
+  int vfio_group_id = atoi(vfio_group_id_str);
+  // Statically allocate DMA region
+  alloc_phys_base += vfio_group_id * alloc_size;
+
+  std::cerr << "simbricks-pci: initializing allocator no sync" << std::endl;
+  int fd = open("/dev/mem", O_RDWR);
   if (fd < 0) {
     std::cerr << "opening devmem failed" << std::endl;
     abort();
@@ -69,7 +83,10 @@ void* VTAMemAlloc(size_t size, int cached) {
   //std::cerr << "simbricks-pci: VTAMemAlloc(" << size << ")" << std::endl;
   alloc_init();
 
-  assert (alloc_off + size <= alloc_size);
+  if (alloc_off + size > alloc_size) {
+    std::cerr << "No more memory available for DMA allocation" << std::endl;
+    abort();
+  }
   void *addr = (void *) ((uint8_t *) alloc_base + alloc_off);
   alloc_off += size;
   //std::cerr << "simbricks-pci:    = " << addr << std::endl;
@@ -110,11 +127,18 @@ void VTAInvalidateCache(void* vir_addr, vta_phy_addr_t phy_addr, int size) {
 void *VTAMapRegister(uint32_t addr) {
   if (!reg_bar) {
     char *device = std::getenv("VTA_DEVICE");
+    char *vfio_group_id_str = std::getenv("VTA_VFIO_GROUP_ID");
     if (device == nullptr) {
       std::cerr << "VTA_DEVICE is not set" << std::endl;
       abort();
     }
-    if ((vfio_fd = vfio_init(device)) < 0) {
+    if (vfio_group_id_str == nullptr) {
+      std::cerr << "VTA_VFIO_GROUP_ID is not set" << std::endl;
+      abort();
+    }
+    int vfio_group_id = atoi(vfio_group_id_str);
+
+    if ((vfio_fd = vfio_init(device, vfio_group_id)) < 0) {
       std::cerr << "vfio init failed" << std::endl;
       abort();
     }
@@ -175,14 +199,21 @@ class VTADevice {
     // VTA start
     VTAWriteMappedReg(vta_host_handle_, 0x0, VTA_START);
 
+    timespec start;
+    clock_gettime(CLOCK_MONOTONIC, &start);
     // Loop until the VTA is done
     unsigned t, flag = 0;
     for (;;) {
       flag = VTAReadMappedReg(vta_host_handle_, 0x00);
       flag &= 0x2;
       if (flag == 0x2) break;
-      std::this_thread::yield();
+      usleep(10);
+      // std::this_thread::yield();
     }
+    timespec end;
+    clock_gettime(CLOCK_MONOTONIC, &end);
+    total_vta_time += (end.tv_sec - start.tv_sec) * 1000000000 + (end.tv_nsec - start.tv_nsec);
+    printf("total vta_time so far: %lu\n", total_vta_time);
     // Report error if timeout
     // return t < wait_cycles ? 0 : 1;
     return 0;

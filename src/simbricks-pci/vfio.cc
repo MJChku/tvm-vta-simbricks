@@ -12,9 +12,11 @@
 
 #include "vfio.h"
 
+int vfio_init(const char *pci_dev) {
+  return vfio_init(pci_dev, 0);
+}
 
-int vfio_init(const char *pci_dev)
-{
+int vfio_init(const char *pci_dev, int group_id) {
   int cont, group, dev;
   struct vfio_group_status g_status = { .argsz = sizeof(g_status) };
   struct vfio_device_info device_info = { .argsz = sizeof(device_info) };
@@ -40,7 +42,9 @@ int vfio_init(const char *pci_dev)
   }
 
   /* Open the vfio group */
-  if((group = open(VFIO_GROUP, O_RDWR)) < 0)
+  char vfio_group[200];
+  sprintf(vfio_group, "/dev/vfio/noiommu-%d", group_id);
+  if ((group = open(vfio_group, O_RDWR)) < 0)
   {
     fprintf(stderr, "vfio_init: failed to open vfio group.\n");
     goto error_cont;
