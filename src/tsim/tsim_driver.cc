@@ -152,6 +152,7 @@ class Device {
       val = dpi_->ReadReg(0x00);
       val &= 0x2;
       if (val == 0x2) break;  // finish
+      usleep(10);
     }
     prof_->Update(0, dpi_->ReadReg(0x04));
     dpi_->SimWait();
