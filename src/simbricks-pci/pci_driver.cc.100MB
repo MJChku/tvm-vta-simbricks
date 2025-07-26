@@ -42,7 +42,7 @@ static int vfio_fd = -1;
 
 static void *alloc_base = nullptr;
 static uint64_t alloc_phys_base = 1ULL * 1024 * 1024 * 1024;
-static size_t alloc_size = 200 * 1024 * 1024;
+static size_t alloc_size = 100 * 1024 * 1024;
 // resnet50 uses 512MB
 // others use 100MB, especially for multiple vtas
 
