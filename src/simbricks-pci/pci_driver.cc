@@ -65,7 +65,7 @@
  #endif
  
  static void *alloc_base = nullptr;
- static size_t alloc_size = 512 * 1024 * 1024;
+ static size_t alloc_size = 200 * 1024 * 1024;
  static size_t alloc_off = 0;
  static uint64_t total_vta_time = 0;
  static int dev_id = -1;
@@ -288,7 +288,7 @@ uintptr_t open_shm_for_nex(const char* shm_path, int reset) {
       VTAWriteMappedReg(vta_host_handle_, 0x1c, 0);
       VTAWriteMappedReg(vta_host_handle_, 0x20, 0);
 
-      // this is for simbricks in nxsim to have base address
+      // this is for simbricks in nex to have base address
        VTAWriteMappedReg64(vta_host_handle_, 0x24,(uint64_t) alloc_base);
    
        // VTA start
@@ -304,7 +304,7 @@ uintptr_t open_shm_for_nex(const char* shm_path, int reset) {
          if (flag == 0x2) break;
             // 100us
             // usleep(10);
-           custom_sleep(10000);
+           custom_sleep(400000);
          // std::this_thread::yield();
        }
        timespec end;
